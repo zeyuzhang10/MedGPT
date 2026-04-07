@@ -1,0 +1,13 @@
+# 忽略所有数据集文件夹
+data/
+datasets/
+
+# 忽略训练输出的模型权重
+logs/
+checkpoints/
+*.pth
+*.pkl
+
+# 忽略 Python 缓存
+__pycache__/
+.ipynb_checkpoints

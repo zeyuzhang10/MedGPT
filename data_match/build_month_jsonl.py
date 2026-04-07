@@ -25,14 +25,14 @@ if _pkg_dir.name == "dicom_dataset_tools":
     if str(_root_dir) not in sys.path:
         sys.path.insert(0, str(_root_dir))
 
-from dicom_dataset_tools.dicom_pipeline.dicom_utils import (
+from data_match.dicom_pipeline.dicom_utils import (
     export_png,
     extract_meta,
     is_probably_dicom,
     is_too_large,
     read_dicom,
 )
-from dicom_dataset_tools.dicom_pipeline.excel_utils import build_index, match_row
+from data_match.dicom_pipeline.excel_utils import build_index, match_row
 
 
 def setup_logger(root: Path, month: str, test: bool) -> logging.Logger:

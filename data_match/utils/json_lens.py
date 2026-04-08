@@ -1,10 +1,10 @@
 def count_jsonl_lines(file_path):
     """
-    统计.jsonl文件的行数（即JSON条目数）
-    
+    统计.jsonl文件的行数（即JSON条目数），并输出前3行内容
+
     参数:
         file_path (str): .jsonl文件的路径
-    
+
     返回:
         int: 文件的行数；若出错返回-1
     """
@@ -12,10 +12,20 @@ def count_jsonl_lines(file_path):
     try:
         # 以只读模式打开文件，使用utf-8编码避免中文乱码
         with open(file_path, 'r', encoding='utf-8') as f:
+            print("="*50)
+            print("📄 文件前3行JSON内容：")
+            print("="*50)
+            
             # 逐行迭代读取（低内存占用，适合大文件）
-            for _ in f:
+            for line in f:
                 line_count += 1
+                # 输出前3行内容
+                if line_count <= 3:
+                    print(f"第 {line_count} 行：{line.strip()}")
+            
+            print("="*50)
         return line_count
+    
     except FileNotFoundError:
         print(f"错误：文件 '{file_path}' 不存在")
         return -1
@@ -32,4 +42,4 @@ if __name__ == "__main__":
     jsonl_file_path = "/media/baller/Getea/5.jsonl"
     lines = count_jsonl_lines(jsonl_file_path)
     if lines >= 0:
-        print(f"该.jsonl文件共有 {lines} 行")
+        print(f"✅ 该.jsonl文件共有 {lines} 行")

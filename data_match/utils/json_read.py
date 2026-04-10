@@ -5,7 +5,10 @@ from tqdm import tqdm  # 导入进度条库
 import glob
 import numpy as np
 from PIL import Image
-from pathlib import Path
+import re
+from collections import defaultdict
+import pandas as pd
+from tqdm import tqdm
 
 def process_ortho_data(input_dir: str, output_file: str):
     # 丰富的骨科关键词库（涵盖常见骨骼、关节、软组织及典型骨科疾病）
@@ -200,19 +203,217 @@ def filter_jsonl_by_image(input_file: str, output_file: str, base_img_dir: str):
     print(f"最终留存率: {(valid_count / total_count * 100):.2f}%" if total_count > 0 else "0.00%")
     print("-" * 40)
 
+
+def analyze_ortho_keywords(file_path: str):
+    # 定义要统计的关键词列表
+    ortho_keywords = [
+        "骨盆", "髋关节", "股骨", "髋臼", "髂骨", "坐骨", "耻骨", 
+        "胫骨", "腓骨", "髌骨", "肱骨", "尺骨", "桡骨", "锁骨", "肩胛骨",
+        "脊柱", "颈椎", "胸椎", "腰椎", "骶骨", "尾骨", "肋骨", "颅骨",
+        "关节", "韧带", "半月板", "滑膜", "肌腱", "软骨",
+        "骨折", "脱位", "半脱位", "骨髓炎", "骨囊肿", "骨软骨瘤", "成骨",
+        "骨骺", "青枝骨折", "骨软骨炎", "发育不良", "侧弯", "畸形"
+    ]
+    
+    # 初始化统计字典
+    keyword_counts = {kw: 0 for kw in ortho_keywords}
+    total_records = 0
+
+    if not Path(file_path).exists():
+        print(f"错误：找不到文件 {file_path}")
+        return
+
+    print(f"开始扫描并统计文件: {file_path} ...")
+    
+    with open(file_path, 'r', encoding='utf-8') as f:
+        for line_idx, line in enumerate(f, 1):
+            line = line.strip()
+            if not line:
+                continue
+                
+            total_records += 1
+            try:
+                # 解析 JSON 确保数据完整，并转为中文字符串用于检索
+                data = json.loads(line)
+                content_str = json.dumps(data, ensure_ascii=False)
+                
+                # 检查每个关键词是否存在于该条数据中
+                for kw in ortho_keywords:
+                    if kw in content_str:
+                        keyword_counts[kw] += 1
+                        
+            except json.JSONDecodeError:
+                print(f"第 {line_idx} 行解析失败，已跳过。")
+
+    # 对统计结果按数值进行降序排序
+    sorted_counts = sorted(keyword_counts.items(), key=lambda x: x[1], reverse=True)
+
+    # 打印最终报告
+    print("\n" + "=" * 45)
+    print(f"统计完成！总分析数据量: {total_records} 条")
+    print("=" * 45)
+    print(f"{'关键词':<10}\t{'数据条数':<10}\t{'占比'}")
+    print("-" * 45)
+    
+    for kw, count in sorted_counts:
+        # 只打印有命中记录的关键词（如果想全打印，可去掉 if 判断）
+        if count > 0:
+            percentage = (count / total_records * 100) if total_records > 0 else 0
+            # 使用 chr(12288) (全角空格) 补齐中文对齐
+            kw_padded = kw.ljust(6, chr(12288)) 
+            print(f"{kw_padded}\t{count:<10}\t{percentage:.2f}%")
+            
+    print("-" * 45)
+    print("注：由于单条检查记录可能同时包含多个部位或疾病（如'股骨骨折'），因此各关键词条数总和可能大于总数据量。")
+
+
+def analyze_dataset_distribution(file_path: str):
+    # 1. 定义关键词词典（区分为“部位”和“病理”用于交叉矩阵）
+    body_parts = [
+        "骨盆", "髋关节", "股骨", "髋臼", "髂骨", "坐骨", "耻骨", 
+        "胫骨", "腓骨", "髌骨", "肱骨", "尺骨", "桡骨", "锁骨", "肩胛骨",
+        "脊柱", "颈椎", "胸椎", "腰椎", "骶骨", "尾骨", "肋骨", "颅骨",
+        "关节", "韧带", "半月板", "滑膜", "肌腱", "软骨", "骨骺"
+    ]
+    pathologies = [
+        "骨折", "青枝骨折", "脱位", "半脱位", "骨髓炎", "骨囊肿", 
+        "骨软骨瘤", "成骨", "骨软骨炎", "发育不良", "侧弯", "畸形"
+    ]
+    all_keywords = body_parts + pathologies
+    
+    # 否定词典（用于判断阴性）
+    negative_words = ["未见", "无", "未发现", "排除", "未见明显", "未显示", "正常"]
+
+    # 2. 初始化统计容器
+    pos_neg_stats = {kw: {'pos': 0, 'neg': 0} for kw in all_keywords}
+    modality_stats = {kw: {'CT': 0, 'DR/CR': 0, 'MRI': 0, 'Other': 0} for kw in all_keywords}
+    cross_matrix = defaultdict(lambda: defaultdict(int))
+    
+    # 获取总行数
+    print("正在计算文件行数...")
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            total_lines = sum(1 for _ in f)
+    except FileNotFoundError:
+        print(f"错误: 找不到文件 {file_path}")
+        return
+
+    print(f"\n开始分析 {total_lines} 条数据分布...")
+    
+    # 3. 逐行解析
+    with open(file_path, 'r', encoding='utf-8') as f:
+        for line in tqdm(f, total=total_lines, desc="Processing JSONL", unit="line"):
+            line = line.strip()
+            if not line:
+                continue
+                
+            try:
+                data = json.loads(line)
+                diag_text = data.get("影像学表现", "") + "。" + data.get("影像学诊断", "")
+                full_text = json.dumps(data, ensure_ascii=False)
+                
+                # 识别模态
+                modality_raw = str(data.get("设备类型", "")).upper() + str(data.get("检查", "")).upper()
+                if "CT" in modality_raw:
+                    modality = "CT"
+                elif any(m in modality_raw for m in ["DR", "CR", "DX", "X线", "摄片"]):
+                    modality = "DR/CR"
+                elif any(m in modality_raw for m in ["MR", "核磁"]):
+                    modality = "MRI"
+                else:
+                    modality = "Other"
+
+                clauses = re.split(r'[。，；！\n]', diag_text)
+                
+                # 关键词统计
+                for kw in all_keywords:
+                    if kw in full_text:
+                        modality_stats[kw][modality] += 1
+                        is_negative = False
+                        for clause in clauses:
+                            if kw in clause:
+                                if any(neg in clause for neg in negative_words):
+                                    is_negative = True
+                                    break
+                        if is_negative:
+                            pos_neg_stats[kw]['neg'] += 1
+                        else:
+                            pos_neg_stats[kw]['pos'] += 1
+
+                # 交叉矩阵
+                for part in body_parts:
+                    if part in full_text:
+                        for patho in pathologies:
+                            if patho in full_text:
+                                cross_matrix[part][patho] += 1
+                                
+            except json.JSONDecodeError:
+                continue
+                
+    # ===================== 输出结果 =====================
+    print("\n\n生成统计表格...")
+
+    # 1. 关键词阴阳性 + 模态表格
+    rows = []
+    for kw in all_keywords:
+        total = pos_neg_stats[kw]['pos'] + pos_neg_stats[kw]['neg']
+        if total == 0:
+            continue
+        pos_cnt = pos_neg_stats[kw]['pos']
+        neg_cnt = pos_neg_stats[kw]['neg']
+        pos_rate = pos_cnt / total * 100 if total > 0 else 0
+        rows.append({
+            "关键词": kw, "总命中": total, "阳性数": pos_cnt, "阴性数": neg_cnt, "阳性率(%)": round(pos_rate,1),
+            "CT": modality_stats[kw]['CT'], "DR/CR": modality_stats[kw]['DR/CR'],
+            "MRI": modality_stats[kw]['MRI'], "其他": modality_stats[kw]['Other']
+        })
+    df_kw = pd.DataFrame(rows).sort_values(by="总命中", ascending=False)
+
+    # 2. 部位-病理交叉矩阵
+    df_cross = pd.DataFrame(cross_matrix).fillna(0).astype(int).T
+    df_cross = df_cross.loc[(df_cross != 0).any(axis=1), (df_cross != 0).any(axis=0)]
+
+    # ===================== 保存文件 =====================
+    save_dir = os.path.dirname(file_path)  # 保存到和原数据同一个文件夹
+
+    # 保存 关键词统计
+    df_kw.to_excel(os.path.join(save_dir, "数据集关键词统计.xlsx"), index=False)
+    df_kw.to_markdown(os.path.join(save_dir, "数据集关键词统计.md"), index=False)
+
+    # 保存 交叉矩阵
+    df_cross.to_excel(os.path.join(save_dir, "部位病理交叉矩阵.xlsx"))
+    df_cross.to_markdown(os.path.join(save_dir, "部位病理交叉矩阵.md"))
+
+    print("\n✅ 所有结果已保存！")
+    print(f"📁 保存位置：{save_dir}")
+    print("📄 生成文件：")
+    print("   - 数据集关键词统计.xlsx")
+    print("   - 数据集关键词统计.md")
+    print("   - 部位病理交叉矩阵.xlsx")
+    print("   - 部位病理交叉矩阵.md")
+
+    # 同时在终端打印预览
+    print("\n" + "="*60)
+    print("关键词统计预览")
+    print("="*60)
+    print(df_kw.to_string(index=False))
+
 if __name__ == "__main__":
-    # # 配置输入文件夹路径和输出文件路径
+
     # INPUT_DIRECTORY = '/media/baller/Getea/jsonl'                       # .jsonl 所在的目录
     # OUTPUT_FILE_PATH = '/media/baller/Getea/pediatric_ortho.jsonl' # 提取后生成的新文件
-    
     # process_ortho_data(INPUT_DIRECTORY, OUTPUT_FILE_PATH)
 
-    # 配置输入、输出与基础图像路径
-    INPUT_JSONL = '/media/baller/Getea/jsonl/pediatric_ortho.jsonl'
-    OUTPUT_JSONL = '/media/baller/Getea/jsonl/pediatric_ortho_usable.jsonl'
+    # Stage 2: 图像可用性校验与过滤
+    # INPUT_JSONL = '/media/baller/Getea/jsonl/pediatric_ortho.jsonl'
+    # OUTPUT_JSONL = '/media/baller/Getea/jsonl/pediatric_ortho_usable.jsonl'
+    # BASE_IMAGE_DIR = '/media/baller/Getea/image' 
+    # filter_jsonl_by_image(INPUT_JSONL, OUTPUT_JSONL, BASE_IMAGE_DIR)
+
+    # # Stage 3：统计骨科子分类数据量
+    # TARGET_JSONL = '/media/baller/Getea/jsonl/pediatric_ortho_usable.jsonl'
+    # analyze_ortho_keywords(TARGET_JSONL)
     
-    # 基础图像目录，注意尾部斜杠或拼接逻辑
-    # 如果用户的绝对要求是 /media/baller/Getea/image 做前缀，请在此处修改。
-    BASE_IMAGE_DIR = '/media/baller/Getea/image' 
-    
-    filter_jsonl_by_image(INPUT_JSONL, OUTPUT_JSONL, BASE_IMAGE_DIR)
+    # Stage 4：分析数据分布（阴阳性、模态分布、部位-病理交叉矩阵）
+    TARGET_JSONL = '/media/baller/Getea/jsonl/pediatric_ortho_usable.jsonl'
+    analyze_dataset_distribution(TARGET_JSONL)

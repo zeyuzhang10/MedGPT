@@ -398,6 +398,113 @@ def analyze_dataset_distribution(file_path: str):
     print("="*60)
     print(df_kw.to_string(index=False))
 
+import json
+from collections import defaultdict
+from datetime import datetime
+from tqdm import tqdm
+
+def analyze_redundant_records(file_path: str, time_threshold_hours: int = 12):
+    # 以 病人编号(PID) 为键存储记录
+    pid_registry = defaultdict(list)
+    total_records = 0
+    missing_pid_count = 0
+
+    print(f"正在读取并解析文件: {file_path}")
+    
+    # 1. 读取数据并按 PID 归类
+    with open(file_path, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+        
+    for line in tqdm(lines, desc="按病人编号归类", unit="条"):
+        line = line.strip()
+        if not line:
+            continue
+            
+        total_records += 1
+        try:
+            data = json.loads(line)
+            pid = str(data.get("病人编号", "")).strip()
+            
+            if not pid:
+                missing_pid_count += 1
+                continue
+                
+            time_str = data.get("检查时间", "")
+            # 尝试解析时间字符串转为 datetime 对象
+            try:
+                dt = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                dt = None  # 如果时间格式异常则跳过时间计算
+                
+            pid_registry[pid].append({
+                "idx": data.get("idx", ""),
+                "name": data.get("病人姓名", "未知"),
+                "study_time": dt,
+                "time_raw": time_str,
+                "exam": data.get("检查", "未知"),
+                "diag": data.get("影像学诊断", "").replace("\n", "")[:30] # 截取前30字供参考
+            })
+            
+        except json.JSONDecodeError:
+            continue
+
+    # 2. 统计独立患者总数
+    unique_pids = len(pid_registry)
+    
+    # 3. 排查同一人的多条记录
+    exact_time_duplicates = []  # 检查时间一模一样的疑似绝对冗余
+    close_time_records = []     # 检查时间相近（阈值内）的疑似拆分
+
+    for pid, records in pid_registry.items():
+        if len(records) > 1:
+            # 过滤掉没有有效时间的记录，并按时间升序排列
+            valid_records = [r for r in records if r["study_time"] is not None]
+            valid_records.sort(key=lambda x: x["study_time"])
+            
+            # 对比相邻的检查记录
+            for i in range(len(valid_records) - 1):
+                r1 = valid_records[i]
+                r2 = valid_records[i+1]
+                
+                # 计算时间差（小时）
+                time_diff = r2["study_time"] - r1["study_time"]
+                diff_hours = time_diff.total_seconds() / 3600.0
+                
+                if diff_hours == 0:
+                    exact_time_duplicates.append((pid, r1, r2))
+                elif diff_hours <= time_threshold_hours:
+                    close_time_records.append((pid, r1, r2, diff_hours))
+
+    # 4. 打印统计报告
+    print("\n" + "=" * 80)
+    print(" 📊 数据集身份唯一性与时间差检测报告")
+    print("=" * 80)
+    print(f"总处理数据条数: {total_records}")
+    print(f"有效独立病人编号 (PID) 总数: {unique_pids} 人")
+    print(f"PID 缺失的无效数据: {missing_pid_count} 条")
+    print("-" * 80)
+    print(f"⚠️ [绝对冗余] 同一PID且【检查时间完全相同】发生次数: {len(exact_time_duplicates)}")
+    print(f"🕒 [相近检查] 同一PID在【{time_threshold_hours}小时内】发生次数: {len(close_time_records)}")
+    print("=" * 80)
+
+    # 5. 打印具体案例以便研判
+    if exact_time_duplicates:
+        print("\n🔍 【时间完全相同的记录】 (高度疑似重复导出或拆分):")
+        # 仅展示前 5 组防止刷屏
+        for i, (pid, r1, r2) in enumerate(exact_time_duplicates[:5]):
+            print(f"[{i+1}] PID: {pid} | 姓名: {r1['name']} | 检查时间: {r1['time_raw']}")
+            print(f"    ├─ 记录A ({r1['idx']}): 项目[{r1['exam']}] | 诊断: {r1['diag']}")
+            print(f"    └─ 记录B ({r2['idx']}): 项目[{r2['exam']}] | 诊断: {r2['diag']}")
+
+    if close_time_records:
+        print(f"\n🏥 【{time_threshold_hours}小时内的相近检查】 (需确认是连做两项检查还是数据异常):")
+        for i, (pid, r1, r2, diff) in enumerate(close_time_records[:5]):
+            print(f"[{i+1}] PID: {pid} | 姓名: {r1['name']} | 时间差: {diff:.1f} 小时")
+            print(f"    ├─ {r1['time_raw']} ({r1['idx']}): 项目[{r1['exam']}]")
+            print(f"    └─ {r2['time_raw']} ({r2['idx']}): 项目[{r2['exam']}]")
+
+
+
 if __name__ == "__main__":
 
     # INPUT_DIRECTORY = '/media/baller/Getea/jsonl'                       # .jsonl 所在的目录
@@ -415,5 +522,9 @@ if __name__ == "__main__":
     # analyze_ortho_keywords(TARGET_JSONL)
     
     # Stage 4：分析数据分布（阴阳性、模态分布、部位-病理交叉矩阵）
+    # TARGET_JSONL = '/media/baller/Getea/jsonl/pediatric_ortho_usable.jsonl'
+    # analyze_dataset_distribution(TARGET_JSONL)
+
+    # Stage 5：姓名去重与身份查重分析, 同一人在同一时段
     TARGET_JSONL = '/media/baller/Getea/jsonl/pediatric_ortho_usable.jsonl'
-    analyze_dataset_distribution(TARGET_JSONL)
+    analyze_redundant_records(TARGET_JSONL, time_threshold_hours=12)

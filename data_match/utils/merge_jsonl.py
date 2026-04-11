@@ -119,4 +119,5 @@ if __name__ == "__main__":
     # 执行合并 (时间阈值: 1.2 小时)
     merge_redundant_jsonl(INPUT_JSONL, OUTPUT_JSONL, time_threshold_hours=1.2)
 
-    # head -n 3 /media/baller/Getea/jsonl/pediatric_ortho_usable_merged.jsonl
+    # head -n 1 /media/baller/Getea/jsonl/pediatric_ortho_usable_merged.jsonl
+    # /media/baller/Getea/image/10_image/10-00003

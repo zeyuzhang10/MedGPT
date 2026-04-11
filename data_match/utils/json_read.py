@@ -377,12 +377,12 @@ def analyze_dataset_distribution(file_path: str):
     save_dir = os.path.dirname(file_path)  # 保存到和原数据同一个文件夹
 
     # 保存 关键词统计
-    df_kw.to_excel(os.path.join(save_dir, "数据集关键词统计.xlsx"), index=False)
-    df_kw.to_markdown(os.path.join(save_dir, "数据集关键词统计.md"), index=False)
+    df_kw.to_excel(os.path.join(save_dir, "合并后数据集关键词统计.xlsx"), index=False)
+    df_kw.to_markdown(os.path.join(save_dir, "合并后数据集关键词统计.md"), index=False)
 
     # 保存 交叉矩阵
-    df_cross.to_excel(os.path.join(save_dir, "部位病理交叉矩阵.xlsx"))
-    df_cross.to_markdown(os.path.join(save_dir, "部位病理交叉矩阵.md"))
+    df_cross.to_excel(os.path.join(save_dir, "合并后部位病理交叉矩阵.xlsx"))
+    df_cross.to_markdown(os.path.join(save_dir, "合并后部位病理交叉矩阵.md"))
 
     print("\n✅ 所有结果已保存！")
     print(f"📁 保存位置：{save_dir}")
@@ -522,9 +522,9 @@ if __name__ == "__main__":
     # analyze_ortho_keywords(TARGET_JSONL)
     
     # Stage 4：分析数据分布（阴阳性、模态分布、部位-病理交叉矩阵）
-    # TARGET_JSONL = '/media/baller/Getea/jsonl/pediatric_ortho_usable.jsonl'
-    # analyze_dataset_distribution(TARGET_JSONL)
+    TARGET_JSONL = '/media/baller/Getea/jsonl/pediatric_ortho_usable_merged.jsonl'
+    analyze_dataset_distribution(TARGET_JSONL)
 
-    # Stage 5：姓名去重与身份查重分析, 同一人在同一时段
-    TARGET_JSONL = '/media/baller/Getea/jsonl/pediatric_ortho_usable.jsonl'
-    analyze_redundant_records(TARGET_JSONL, time_threshold_hours=12)
+    # # Stage 5：姓名去重与身份查重分析, 同一人在同一时段
+    # TARGET_JSONL = '/media/baller/Getea/jsonl/pediatric_ortho_usable.jsonl'
+    # analyze_redundant_records(TARGET_JSONL, time_threshold_hours=12)

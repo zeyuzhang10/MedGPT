@@ -44,7 +44,7 @@ def visualize_ortho_data(stats_excel, matrix_excel):
     plt.grid(axis='y', linestyle='--', alpha=0.6)
     
     plt.tight_layout()
-    stats_png = 'ortho_keywords_distribution_en.png'
+    stats_png = 'new-ortho_keywords_distribution.png'
     plt.savefig(stats_png, dpi=300)
     plt.close()
     print(f"成功保存图表 1: {stats_png}")
@@ -75,14 +75,14 @@ def visualize_ortho_data(stats_excel, matrix_excel):
     plt.yticks(rotation=0, fontsize=12)
     
     plt.tight_layout()
-    matrix_png = 'ortho_cross_matrix_heatmap_en.png'
+    matrix_png = 'new-ortho_cross_matrix_heatmap.png'
     plt.savefig(matrix_png, dpi=300)
     plt.close()
     print(f"成功保存图表 2: {matrix_png}")
 
 if __name__ == "__main__":
     # 请将这里的两个文件名替换为你实际保存的 Excel 文件路径
-    STATS_FILE = '/media/data/zzy/MedGPT/数据集关键词统计.xlsx'     # 包含总命中、阳性数、阴性数的表
-    MATRIX_FILE = '/media/data/zzy/MedGPT/部位病理交叉矩阵.xlsx'    # 交叉矩阵表
+    STATS_FILE = '/media/baller/Getea/jsonl/合并后数据集关键词统计.xlsx'     # 包含总命中、阳性数、阴性数的表
+    MATRIX_FILE = '/media/baller/Getea/jsonl/合并后部位病理交叉矩阵.xlsx'    # 交叉矩阵表
     
     visualize_ortho_data(STATS_FILE, MATRIX_FILE)

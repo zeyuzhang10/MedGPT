@@ -1,0 +1,63 @@
+import matplotlib.subplots as plt
+import numpy as np
+
+# 设置全局样式
+plt.style.use('seaborn-v0_8-whitegrid')
+fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+
+# --- Plot 1: Ablation Study Bar Chart ---
+models = ['Baseline', '+ SECR', '+ PSY-PO', 'Ours (Full)']
+ce_f1 = [0.25, 0.35, 0.32, 0.42]  
+bleu4 = [0.10, 0.14, 0.12, 0.16]  
+
+x = np.arange(len(models))
+width = 0.35
+
+ax1 = axes[0]
+ax1.bar(x - width/2, ce_f1, width, label='Clinical Entity F1', color='#4C72B0')
+ax1.bar(x + width/2, bleu4, width, label='BLEU-4', color='#DD8452')
+ax1.set_ylabel('Scores')
+ax1.set_title('Ablation Study: Impact of SECR and PSY-PO')
+ax1.set_xticks(x)
+ax1.set_xticklabels(models)
+ax1.legend()
+
+# --- Plot 2: Dynamic Evolution Loop Line Chart ---
+iterations = [1, 2, 3, 4, 5]
+f1_scores = [0.55, 0.68, 0.76, 0.82, 0.85] 
+error_rates = [0.45, 0.30, 0.18, 0.12, 0.08]
+
+ax2 = axes[1]
+ax2.plot(iterations, f1_scores, marker='o', linestyle='-', color='#2CA02C', label='Skill Match F1 ($F_i^{(t)}$)')
+ax2.plot(iterations, error_rates, marker='s', linestyle='--', color='#D62728', label='Missing Skill Rate')
+ax2.set_xlabel('Evolution Iteration ($t$)')
+ax2.set_ylabel('Performance Metric')
+ax2.set_title('SECR Dynamic Evolution Loop Progression')
+ax2.set_xticks(iterations)
+ax2.legend()
+
+# --- Plot 3: PSY-PO IRT Parameters Scatter Plot ---
+np.random.seed(42)
+num_samples = 50
+b_k = np.random.normal(0, 1.5, num_samples)    # 难度 Difficulty
+a_k = np.random.uniform(0.5, 2.5, num_samples) # 区分度 Discrimination
+
+# 模拟费雪信息量 (假设当前能力 theta_cur 近似为 0.5)
+fisher_info = a_k**2 * np.exp(-((b_k - 0.5)**2)) 
+
+ax3 = axes[2]
+scatter = ax3.scatter(b_k, a_k, c=fisher_info, cmap='viridis', s=fisher_info*100 + 20, alpha=0.7, edgecolors='w')
+ax3.axvline(x=0.5, color='r', linestyle='--', alpha=0.5, label='Current Model Ability ($\\theta_{cur}$)')
+
+# 标记最大费雪信息量的样本 (最优负样本)
+max_info_idx = np.argmax(fisher_info)
+ax3.scatter(b_k[max_info_idx], a_k[max_info_idx], color='red', s=200, marker='*', label='Selected Hard Negative ($y^{*-}$)')
+
+ax3.set_xlabel('Difficulty ($b_k$)')
+ax3.set_ylabel('Discrimination ($a_k$)')
+ax3.set_title('PSY-PO Candidate Pool Analysis (3PL Model)')
+ax3.legend()
+plt.colorbar(scatter, ax=ax3, label='Fisher Information ($I_k$)')
+
+plt.tight_layout()
+plt.show()
